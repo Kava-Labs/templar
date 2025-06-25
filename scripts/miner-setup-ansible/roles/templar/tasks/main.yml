@@ -17,6 +17,13 @@
     state: directory
     mode: "0755"
 
+- name: Install essential apt packages
+  apt:
+    name: "{{ apt_packages + additional_apt_packages }}"
+    state: present
+    update_cache: yes
+
+# After installing apt packages, to ensure git is available
 - name: Clone the templar repository into the workspace
   git:
     repo: "https://github.com/tplr-ai/templar.git"
@@ -24,12 +31,6 @@
     update: yes
     force: yes
   become: false
-
-- name: Install essential apt packages
-  apt:
-    name: "{{ apt_packages + additional_apt_packages }}"
-    state: present
-    update_cache: yes
 
 - name: Install essential pip packages globally
   pip:
