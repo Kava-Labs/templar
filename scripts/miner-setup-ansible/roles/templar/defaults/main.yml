@@ -35,8 +35,8 @@ env_vars:
 # Whether to use Systemd or not
 use_systemd: false
 
-# Miner cli parameters
-actual_batch_size: 5
+# Node cli parameters
+actual_batch_size: 5  # Only used for miners
 netuid: "3"
 subtensor_network: "finney"
 wallet_name: ""
@@ -45,6 +45,7 @@ wallet_name: ""
 # wallet_hotkey: ""
 cuda_devices: ["cuda:0"]
 wallet_hotkeys: ["miner_0"]
+node_types: ["miner"]
 
 apt_packages:
   - less

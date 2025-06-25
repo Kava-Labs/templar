@@ -1,0 +1,29 @@
+#!/bin/env bash
+
+set -x
+
+source .venv/bin/activate
+
+{% for key, value in env_vars.items() %}
+export {{ key }}={{ value | quote }}
+{% endfor %}
+
+# Instance-specific overrides
+export CUDA_DEVICE={{ device | quote }}
+export WALLET_HOTKEY={{ wallet_hotkey | quote }}
+export NODE_TYPE="validator"
+
+
+while true; do
+    echo "Starting neurons/validator.py..."
+    .venv/bin/python neurons/validator.py \
+      --wallet.name {{ wallet_name }} \
+      --wallet.hotkey {{ wallet_hotkey }} \
+      --device {{ device }} \
+      --use_wandb \
+      --netuid "{{ netuid }}" \
+      --subtensor.network "{{ subtensor_network }}"
+    EXIT_CODE=$?
+    echo "neurons/validator.py exited with code ${EXIT_CODE}. Restarting in 5 seconds..."
+    sleep 5
+done

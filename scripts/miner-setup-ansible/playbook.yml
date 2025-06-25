@@ -7,10 +7,13 @@
   vars:
     workspace_dir: "{{ ansible_env.HOME }}/workspace"
   pre_tasks:
-    - name: Verify cuda_devices and wallet_hotkeys arrays match in length
+    - name: Verify cuda_devices, wallet_hotkeys, and node_types arrays match in length
       assert:
-        that: cuda_devices|length == wallet_hotkeys|length
-        fail_msg: "cuda_devices and wallet_hotkeys must have the same number of items"
+        that: 
+          - cuda_devices|length == wallet_hotkeys|length
+          - cuda_devices|length == node_types|length
+        fail_msg: "cuda_devices, wallet_hotkeys, and node_types must have the same number of items"
+
   tasks:
     - name: Include templar role for each GPU instance
       include_role:
@@ -18,7 +21,8 @@
       vars:
         device: "{{ cuda_devices[idx] }}"
         wallet_hotkey: "{{ wallet_hotkeys[idx] }}"
-        templar_dir: "{{ workspace_dir }}/templar-{{ cuda_devices[idx] | regex_replace('^cuda:?','') }}"
+        node_type: "{{ node_types[idx] }}"
+        templar_dir: "{{ workspace_dir }}/templar-{{ node_types[idx] }}-{{ cuda_devices[idx] | regex_replace('^cuda:?','') }}"
         miner_index: idx
       loop_control:
         index_var: idx

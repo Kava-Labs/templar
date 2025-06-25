@@ -1,0 +1,15 @@
+[Unit]
+Description=Templar Validator Service
+After=network.target
+
+[Service]
+WorkingDirectory={{ templar_dir }}
+EnvironmentFile={{ templar_dir }}/.env
+ExecStart={{ templar_dir }}/.venv/bin/python neurons/validator.py --wallet.name {{ wallet_name }} --wallet.hotkey {{ wallet_hotkey }} --device {{ device }} --netuid "{{ netuid }}" --subtensor.network "{{ subtensor_network }}"
+Restart=always
+RestartSec=5s
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Install]
+WantedBy=multi-user.target

@@ -1,8 +1,10 @@
 # Ansible Provisioning Playbook
 
-This Ansible project provisions templar. It clones the repository, sets up a the required venv with CUDA packages, installs needed packages, and deploys a continuously running miner service.
+This Ansible project provisions templar nodes (miners and validators). It clones
+the repository, sets up the required venv with CUDA packages, installs needed
+packages, and deploys continuously running services.
 
-_**Note**: currently we only support Ubuntu (expected 22.04.) and miner nodes with CUDA support already installed._
+_**Note**: currently we only support Ubuntu (expected 22.04.) and nodes with CUDA support already installed._
 
 ## Table of Contents
 
@@ -14,6 +16,8 @@ _**Note**: currently we only support Ubuntu (expected 22.04.) and miner nodes wi
   - [Running the Playbook](#running-the-playbook)
   - [Overriding Default Variables](#overriding-default-variables)
 - [Customization](#customization)
+- [Multi-GPU Support](#multi-gpu-support)
+- [Validator vs Miner Configuration](#validator-vs-miner-configuration)
 - [Additional Notes](#additional-notes)
 
 ## Prerequisites
@@ -24,7 +28,7 @@ Before running the playbook, ensure you have the following installed on your con
 - A Unix-like environment (Linux/macOS) with SSH access configured to your target hosts.
 - Python 3 and pip (if you plan to run additional pip-based tasks locally).
 - [Ansible Vault](https://docs.ansible.com/ansible/latest/user_guide/vault.html) for securely storing sensitive data.
-- A target host with SSH access and Python installed (the playbook will install Python if it’s not present).
+- A target host with SSH access and Python installed (the playbook will install Python if it's not present).
 - A CUDA-enabled GPU for running the miner.
 
 ## Configuration
@@ -35,14 +39,17 @@ Create an inventory file defining your target hosts and their GPU configurations
 
 ```ini
 [bittensor_subnet]
-# Single GPU host example
-192.168.123.213 ansible_user=root ansible_port=12345 wallet_hotkeys='["miner"]' cuda_devices='["cuda"]'
+# Single GPU miner example
+192.168.123.213 ansible_user=root ansible_port=12345 wallet_hotkeys='["miner"]' cuda_devices='["cuda"]' node_types='["miner"]'
 
-# Multi-GPU host example
-192.168.222.111 ansible_user=root ansible_port=23456 wallet_hotkeys='["miner_1", "miner_2", "miner_3", "miner_4"]' cuda_devices='["cuda:0", "cuda:1", "cuda:2", "cuda:3"]'
+# Single GPU validator example
+192.168.123.214 ansible_user=root ansible_port=12345 wallet_hotkeys='["validator"]' cuda_devices='["cuda"]' node_types='["validator"]'
+
+# Multi-GPU mixed host example
+192.168.222.111 ansible_user=root ansible_port=23456 wallet_hotkeys='["miner_1", "validator_1", "miner_2", "miner_3"]' cuda_devices='["cuda:0", "cuda:1", "cuda:2", "cuda:3"]' node_types='["miner", "validator", "miner", "miner"]'
 ```
 
-Note: The `wallet_hotkeys` and `cuda_devices` arrays must have matching lengths.
+Note: The `wallet_hotkeys`, `cuda_devices`, and `node_types` arrays must have matching lengths.
 
 **Steps to create the inventory file:**
 
@@ -81,6 +88,7 @@ To securely store sensitive environment variables (e.g., API keys, wallet creden
    # GPU configuration (defaults, can be overridden in inventory)
    cuda_devices: ["cuda:0"]
    wallet_hotkeys: ["miner_0"]
+   node_types: ["miner"]
    ```
 
 4. Save and exit the editor. When you run the playbook, you’ll be prompted for the vault password.
@@ -89,10 +97,10 @@ To securely store sensitive environment variables (e.g., API keys, wallet creden
 
 ### Running the Playbook
 
-From the root directory (where `provision.yml` is located), run:
+From the root directory (where `playbook.yml` is located), run:
 
 ```bash
-ansible-playbook -i inventory provision.yml --ask-vault-pass
+ansible-playbook -i inventory playbook.yml --ask-vault-pass
 ```
 
 - The `-i inventory` option tells Ansible which inventory file to use.
@@ -109,7 +117,7 @@ The playbook is designed to be modular and configurable. You can override defaul
    Pass variables directly via the command line:
 
    ```bash
-   ansible-playbook -i inventory provision.yml -e "actual_batch_size=5 wallet_name=default wallet_hotkey=miner" --ask-vault-pass
+   ansible-playbook -i inventory playbook.yml -e "actual_batch_size=5 wallet_name=default" --ask-vault-pass
    ```
 
 3. **Custom Defaults:**
@@ -123,15 +131,16 @@ The playbook is designed to be modular and configurable. You can override defaul
   - `additional_pip_packages`: List extra pip packages to install globally.
   - `additional_uv_pip_packages`: List extra pip packages to install in the virtual environment.
 
-- **Miner Parameters:**
-  Default miner parameters (e.g., `actual_batch_size`, `device`, `netuid`, `subtensor_network`, `wallet_name`, `wallet_hotkey`) are defined in the defaults file.
+- **Node Parameters:**
+  Default node parameters (e.g., `actual_batch_size` for miners, `device`, `netuid`, `subtensor_network`, `wallet_name`, `wallet_hotkey`, `node_type`) are defined in the defaults file. Note that validators do not use the `actual_batch_size` parameter.
 
 - **Templates:**
   Both `.env` and `run.sh` are generated via Jinja2 templates (`.env.j2` and `run.sh.j2`). Adjust these templates if your application requires additional logic or different formatting.
 
 ## Multi-GPU Support
 
-The playbook supports running multiple miner instances on hosts with multiple GPUs. For each GPU:
+The playbook supports running multiple node instances (miners and/or validators)
+on hosts with multiple GPUs. For each GPU:
 
 - A separate clone of the repository is created in a unique directory
 - Environment variables are templated with GPU-specific settings
@@ -139,18 +148,32 @@ The playbook supports running multiple miner instances on hosts with multiple GP
 
 To configure multiple GPUs:
 
-1. In your inventory, specify arrays for `cuda_devices` and `wallet_hotkeys`:
+1. In your inventory, specify arrays for `cuda_devices`, `wallet_hotkeys`, and `node_types`:
 
    ```ini
-   miner2 cuda_devices='["cuda:0", "cuda:1"]' wallet_hotkeys='["miner_1", "miner_2"]'
+   mixed_host cuda_devices='["cuda:0", "cuda:1"]' wallet_hotkeys='["miner_1", "validator_1"]' node_types='["miner", "validator"]'
    ```
 
 2. The playbook will automatically:
-   - Create separate directories (e.g., templar-cuda0, templar-cuda1)
-   - Configure each instance with its own GPU and wallet
+   - Create separate directories (e.g., templar-miner-0, templar-validator-1)
+   - Configure each instance with its own GPU, wallet, and node type
    - Start separate services for each GPU
 
 Note: Ensure you have unique wallet hotkeys for each GPU to avoid conflicts.
+
+## Validator vs Miner Configuration
+
+**Validators:**
+- Use `neurons/validator.py`
+- Do not use the `--actual_batch_size` parameter
+- Require high-end GPUs (NVIDIA H200 with 141GB VRAM recommended)
+- Set `NODE_TYPE=validator` environment variable
+
+**Miners:**
+- Use `neurons/miner.py`
+- Use the `--actual_batch_size` parameter
+- Can run on various CUDA-enabled GPUs
+- Set `NODE_TYPE=miner` environment variable (default)
 
 ## Additional Notes
 

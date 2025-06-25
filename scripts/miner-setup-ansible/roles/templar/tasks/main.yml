@@ -100,12 +100,21 @@
     mode: '0644'
   become: false
 
-- name: Template run.sh into the templar project directory
+- name: Template run.sh into the templar project directory (for miners)
   template:
     src: "run.sh.j2"
     dest: "{{ templar_dir }}/run.sh"
     mode: '0755'
   become: false
+  when: node_type == "miner"
+
+- name: Template validator_run.sh into the templar project directory (for validators)
+  template:
+    src: "validator_run.sh.j2"
+    dest: "{{ templar_dir }}/run.sh"
+    mode: '0755'
+  become: false
+  when: node_type == "validator"
 
 - name: Ensure the user sources the .env file in their profile (.bashrc)
   lineinfile:
@@ -120,7 +129,7 @@
     - name: Template systemd service file for miner
       template:
         src: miner.service.j2
-        dest: /etc/systemd/system/miner.service
+        dest: "/etc/systemd/system/miner-{{ cuda_devices[miner_index] | regex_replace('^cuda:?','') }}.service"
       become: true
 
     - name: Reload systemd daemon
@@ -130,18 +139,40 @@
 
     - name: Enable and restart miner service
       systemd:
-        name: miner.service
+        name: "miner-{{ cuda_devices[miner_index] | regex_replace('^cuda:?','') }}.service"
         enabled: yes
         state: restarted
       become: true
-  when: use_systemd
+  when: use_systemd and node_type == "miner"
 
-- name: Manage miner process via nohup when systemd is not available
+- name: Manage validator process via systemd if available
   block:
-    - name: Kill any running miner process
+    - name: Template systemd service file for validator
+      template:
+        src: validator.service.j2
+        dest: "/etc/systemd/system/validator-{{ cuda_devices[miner_index] | regex_replace('^cuda:?','') }}.service"
+      become: true
+
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
+      become: true
+
+    - name: Enable and restart validator service
+      systemd:
+        name: "validator-{{ cuda_devices[miner_index] | regex_replace('^cuda:?','') }}.service"
+        enabled: yes
+        state: restarted
+      become: true
+  when: use_systemd and node_type == "validator"
+
+- name: Manage node process via nohup when systemd is not available
+  block:
+    - name: Kill any running node process
       shell: |
         pkill -f 'bash run.sh' || true
         pkill -f 'python neurons/miner.py' || true
+        pkill -f 'python neurons/validator.py' || true
       ignore_errors: true
       become: false
 
@@ -149,8 +180,8 @@
       pause:
         seconds: 2
 
-    - name: Start the miner with nohup (fire-and-forget)
-      shell: "nohup bash run.sh > miner_loop.log 2>&1 &"
+    - name: Start the node with nohup (fire-and-forget)
+      shell: "nohup bash run.sh > {{ node_type }}_loop.log 2>&1 &"
       args:
         chdir: "{{ templar_dir }}"
       async: 0
