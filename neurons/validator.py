@@ -210,7 +210,7 @@ class Validator:
         # Init comms
         self.comms = tplr.comms.Comms(
             wallet=self.wallet,
-            save_location="/tmp",
+            save_location="/workspace/tmp",
             key_prefix="model",
             config=self.config,
             netuid=self.config.netuid,
@@ -713,9 +713,9 @@ class Validator:
             scheduler=self.scheduler,
             current_window=self.current_window,
             device=self.config.device,
-            init_version=tplr.__version__
-            if has_new_checkpoint
-            else self.bootstrap_version,
+            init_version=(
+                tplr.__version__ if has_new_checkpoint else self.bootstrap_version
+            ),
         )
         if success:
             self.optimizer = loaded_optimizer
@@ -885,9 +885,9 @@ class Validator:
                 old_score = self.final_scores[uid].item()
                 new_score = old_score  # Initialize new_score with old_score value
                 if self.final_scores[uid] > 0:
-                    self.final_scores[uid] *= (
-                        0.75  # Apply flat 25% reduction for positive scores only
-                    )
+                    self.final_scores[
+                        uid
+                    ] *= 0.75  # Apply flat 25% reduction for positive scores only
 
                     new_score = self.final_scores[uid].item()
 
@@ -1057,9 +1057,9 @@ class Validator:
                     # Only reduce positive scores
                     if self.final_scores[uid] > 0:
                         self.final_scores[uid] *= self.idx_similarity_slashing_rate
-                        self.binary_moving_averages[uid] *= (
-                            self.idx_similarity_slashing_rate
-                        )
+                        self.binary_moving_averages[
+                            uid
+                        ] *= self.idx_similarity_slashing_rate
 
                         new_score = self.final_scores[uid].item()
                         tplr.log_with_context(
@@ -1399,15 +1399,15 @@ class Validator:
                     except Exception:
                         old_score = self.final_scores[eval_uid].item()
 
-                        self.binary_moving_averages[eval_uid] *= (
-                            self.missing_gradient_slash_rate
-                        )
+                        self.binary_moving_averages[
+                            eval_uid
+                        ] *= self.missing_gradient_slash_rate
 
                         # Only reduce positive scores
                         if self.final_scores[eval_uid] > 0:
-                            self.final_scores[eval_uid] *= (
-                                self.missing_gradient_slash_rate
-                            )
+                            self.final_scores[
+                                eval_uid
+                            ] *= self.missing_gradient_slash_rate
                             new_score = self.final_scores[eval_uid].item()
                             tplr.log_with_context(
                                 level="info",
@@ -1999,11 +1999,12 @@ class Validator:
                     # new_avg = (1-alpha) * old_avg + alpha * new_value
                     # where alpha is binary_score_ma_alpha hyperparameter
                     self.binary_moving_averages[eval_uid] = (
-                        (1 - self.hparams.binary_score_ma_alpha)
-                        * self.binary_moving_averages[eval_uid]
-                        + self.hparams.binary_score_ma_alpha
-                        * self.binary_indicator_scores[eval_uid]
-                    )
+                        1 - self.hparams.binary_score_ma_alpha
+                    ) * self.binary_moving_averages[
+                        eval_uid
+                    ] + self.hparams.binary_score_ma_alpha * self.binary_indicator_scores[
+                        eval_uid
+                    ]
                     tplr.log_with_context(
                         level="debug",
                         message=f"Binary Moving Average Score : {self.binary_moving_averages[eval_uid]}",
@@ -2045,9 +2046,9 @@ class Validator:
 
                     if self.final_scores[eval_uid] > 0:
                         self.final_scores[eval_uid] *= self.missing_gradient_slash_rate
-                        self.binary_moving_averages[eval_uid] *= (
-                            self.missing_gradient_slash_rate
-                        )
+                        self.binary_moving_averages[
+                            eval_uid
+                        ] *= self.missing_gradient_slash_rate
 
                         new_score = self.final_scores[eval_uid].item()
                         tplr.log_with_context(
