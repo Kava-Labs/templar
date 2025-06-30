@@ -74,7 +74,7 @@ class Comms(ChainManager):
         self.wallet = wallet
 
         # Create temp directory for this instance
-        self.temp_dir = os.path.join("/tmp", f"templar_{self.uid}")
+        self.temp_dir = os.path.join(save_location, f"templar_{self.uid}")
         os.makedirs(self.temp_dir, exist_ok=True)
         # Get the bucket directly
         self.bucket = self.get_own_bucket("gradients", "write")
@@ -97,9 +97,9 @@ class Comms(ChainManager):
 
         ## a single aiobotocore session and a dictionary of clients
         self.session = get_session()
-        self._s3_clients: dict[
-            tuple[str, str, str], AioBaseClient
-        ] = {}  # (acc_key, sec_key, account_id) -> s3_client
+        self._s3_clients: dict[tuple[str, str, str], AioBaseClient] = (
+            {}
+        )  # (acc_key, sec_key, account_id) -> s3_client
 
         self.lock = asyncio.Lock()
         self.active_peers = set()  # Set to store active peers
