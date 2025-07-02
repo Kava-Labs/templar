@@ -83,6 +83,8 @@ def timer(name: str, wandb_obj=None, step=None, metrics_logger=None):
 
 
 class Validator:
+    # Priority UID that should always be included in peer selection and evaluation
+    PRIORITY_UID = 251
     @staticmethod
     def config():
         parser = argparse.ArgumentParser(description="Validator script")
@@ -2464,12 +2466,37 @@ class Validator:
 
             torch.cuda.empty_cache()
 
+    def _ensure_priority_uid(self, peer_list: list[int], max_size: int) -> list[int]:
+        """
+        Helper method to ensure priority UID is always included in a peer list.
+
+        Args:
+            peer_list: List of peer UIDs
+            max_size: Maximum size of the list
+
+        Returns:
+            Updated peer list with priority UID prioritized
+        """
+        if self.PRIORITY_UID in self.comms.active_peers and self.PRIORITY_UID not in peer_list:
+            # Remove the last peer if we're at max capacity to make room for priority UID
+            if len(peer_list) >= max_size:
+                peer_list.pop()
+            peer_list.insert(0, self.PRIORITY_UID)  # Insert at the beginning for highest priority
+            tplr.log_with_context(
+                level="info",
+                message=f"Added priority UID {self.PRIORITY_UID} to peer selection",
+                sync_window=self.sync_window,
+                current_window=self.current_window,
+            )
+        return peer_list
+
     def select_initial_peers(self) -> list[int] | None:
         """
         Simple initial peer selection based on incentive.
         1) Select peers with highest incentive
         2) If needed, fill remaining slots with active peers
         3) Ensure we have minimum number of peers
+        4) ALWAYS include UID 251 for priority evaluation
         """
         try:
             tplr.log_with_context(
@@ -2494,7 +2521,10 @@ class Validator:
                 reverse=True,
             )[: self.hparams.max_topk_peers]
 
-            # If we have enough peers with incentive, return them
+            # 1.5. ALWAYS include UID 251 if it's active
+            top_incentive_peers = self._ensure_priority_uid(top_incentive_peers, self.hparams.max_topk_peers)
+
+            # If we have enough peers with incentive (including priority UID), return them
             if len(top_incentive_peers) == self.hparams.max_topk_peers:
                 tplr.log_with_context(
                     level="info",
@@ -2563,6 +2593,7 @@ class Validator:
         2) Sort them by weight (highest first)
         3) Select up to max_topk_peers
         4) If not enough high-weight peers, fill remaining with random active peers
+        5) ALWAYS include UID 251 for priority evaluation
         """
         # Get all active peers as a list
         active_peers = [int(peer) for peer in self.comms.active_peers]
@@ -2590,9 +2621,12 @@ class Validator:
         highest_weight_count = min(len(peer_weights), self.hparams.max_topk_peers)
         selected_peers = [peer_id for peer_id, _ in peer_weights[:highest_weight_count]]
 
+        # ALWAYS include UID 251 if it's active
+        selected_peers = self._ensure_priority_uid(selected_peers, self.hparams.max_topk_peers)
+
         tplr.log_with_context(
             level="info",
-            message=f"Selected {len(selected_peers)} peers based on highest weights",
+            message=f"Selected {len(selected_peers)} peers based on highest weights (including priority UID 251)",
             sync_window=self.sync_window,
             current_window=self.current_window,
         )
@@ -3019,6 +3053,7 @@ class Validator:
         """
         Bins evaluation peers based on their performance metrics.
         Peers are grouped into bins of similar performance.
+        UID 251 is always placed in the highest priority bin (bin 0).
 
         Args:
             num_bins (int): Number of bins to divide peers into
@@ -3042,6 +3077,10 @@ class Validator:
         # Collect performance metrics for binning
         peer_metrics = []
         for uid in active_peers:
+            # Skip priority UID for now, we'll handle it separately
+            if uid == self.PRIORITY_UID:
+                continue
+
             metric = (
                 float(self.openskill_ratings[uid].ordinal())
                 if uid in self.openskill_ratings
@@ -3052,6 +3091,16 @@ class Validator:
         # Sort peers by metric (highest first)
         peer_metrics.sort(key=lambda x: x[1], reverse=True)
         sorted_peers = [uid for uid, _ in peer_metrics]
+
+        # ALWAYS place priority UID at the beginning (highest priority)
+        if self.PRIORITY_UID in active_peers:
+            sorted_peers.insert(0, self.PRIORITY_UID)
+            tplr.log_with_context(
+                level="info",
+                message=f"Placed priority UID {self.PRIORITY_UID} at highest priority position for evaluation",
+                sync_window=self.sync_window,
+                current_window=self.current_window,
+            )
 
         total_peers = len(sorted_peers)
         peers_per_bin = total_peers // num_bins
@@ -3088,9 +3137,10 @@ class Validator:
 
         # Log the bins for debugging
         for bin_idx, peer_list in bins.items():
+            priority_status = f" (contains priority UID {self.PRIORITY_UID})" if self.PRIORITY_UID in peer_list else ""
             tplr.log_with_context(
                 level="info",
-                message=f"Bin {bin_idx} (size {len(peer_list)}): {peer_list}",
+                message=f"Bin {bin_idx} (size {len(peer_list)}): {peer_list}{priority_status}",
                 sync_window=self.sync_window,
                 current_window=self.current_window,
             )
@@ -3123,6 +3173,7 @@ class Validator:
     ) -> list[int]:
         """
         Selects peers for evaluation from a specific bin using weighted sampling.
+        UID 251 is always selected if it's in the chosen bin.
 
         Args:
             bins (dict): Dictionary mapping bin indices to lists of peer UIDs
@@ -3144,17 +3195,34 @@ class Validator:
         # Get peers in the selected bin
         bin_peers = bins[bin_idx]
 
-        # Get weights for weighted sampling
-        candidate_uids = list(bin_peers)
-        candidate_weights = [self.eval_peers[uid] for uid in candidate_uids]
+        # ALWAYS include priority UID if it's in this bin
+        selected_uids = []
+        if self.PRIORITY_UID in bin_peers:
+            selected_uids.append(self.PRIORITY_UID)
+            tplr.log_with_context(
+                level="info",
+                message=f"Automatically selected priority UID {self.PRIORITY_UID} for evaluation",
+                sync_window=self.sync_window,
+                current_window=self.current_window,
+            )
 
-        # Determine how many peers to select (either all in the bin or uids_per_window)
-        k = min(self.hparams.uids_per_window, len(candidate_uids))
+        # Get remaining peers (excluding priority UID)
+        remaining_peers = [uid for uid in bin_peers if uid != self.PRIORITY_UID]
 
-        # Use weighted random sampling
-        selected_uids = self.comms.weighted_random_sample_no_replacement(
-            candidate_uids, candidate_weights, k
-        )
+        if remaining_peers:
+            # Get weights for weighted sampling of remaining peers
+            candidate_weights = [self.eval_peers[uid] for uid in remaining_peers]
+
+            # Determine how many more peers to select
+            remaining_slots = self.hparams.uids_per_window - len(selected_uids)
+            k = min(remaining_slots, len(remaining_peers))
+
+            if k > 0:
+                # Use weighted random sampling for remaining peers
+                additional_uids = self.comms.weighted_random_sample_no_replacement(
+                    remaining_peers, candidate_weights, k
+                )
+                selected_uids.extend(additional_uids)
 
         tplr.log_with_context(
             level="info",
