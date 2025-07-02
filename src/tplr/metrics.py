@@ -58,6 +58,7 @@ INFLUXDB_HOST: Final[str] = os.environ.get("INFLUXDB_HOST", DEFAULT_HOST)
 INFLUXDB_PORT: Final[int] = int(os.environ.get("INFLUXDB_PORT", str(DEFAULT_PORT)))
 INFLUXDB_DATABASE: Final[str] = os.environ.get("INFLUXDB_DATABASE", DEFAULT_DATABASE)
 INFLUXDB_ORG: Final[str] = os.environ.get("INFLUXDB_ORG", DEFAULT_ORG)
+INFLUXDB_SSL: Final[bool] = os.environ.get("INFLUXDB_SSL", "true").lower() == "true"
 
 
 class MertricsLoggerWriteOptions(WriteOptions):
@@ -93,6 +94,7 @@ class MetricsLogger:
         database: str = INFLUXDB_DATABASE,
         token: str | None = os.environ.get("INFLUXDB_TOKEN"),
         org: str = INFLUXDB_ORG,
+        ssl: bool = INFLUXDB_SSL,
         prefix: str = "",
         uid: str | None = None,
         version: str = __version__,
@@ -113,6 +115,7 @@ class MetricsLogger:
             database (str, optional): Name of the InfluxDB database. Can be overridden with INFLUXDB_DATABASE env variable.
             token (str, optional): InfluxDB token. Can be overridden with INFLUXDB_TOKEN env variable.
             org (str, optional): InfluxDB organization. Can be overridden with INFLUXDB_ORG env variable.
+            ssl (bool, optional): Whether to use SSL/TLS for the connection. Can be overridden with INFLUXDB_SSL env variable.
             prefix (str, optional): Prefix to add to all metric names. Defaults to ""
             uid (str, optional): Unique identifier for the training run. Defaults to None.
             version (str, optional): Version of the templar library. Defaults to __version__.
@@ -127,7 +130,8 @@ class MetricsLogger:
             token = FALLBACK_INFLUXDB_TOKEN
             logger.warning("INFLUXDB_TOKEN is missing or empty; using fallback token.")
 
-        url = f"https://{host}:{port}"
+        protocol = "https" if ssl else "http"
+        url = f"{protocol}://{host}:{port}"
         self.client = InfluxDBClient(url=url, token=token, org=org)
         self.write_api = self.client.write_api(
             write_options=MertricsLoggerWriteOptions(
