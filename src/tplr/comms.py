@@ -47,7 +47,7 @@ from .schemas import Bucket
 
 # Constants
 CF_REGION_NAME: str = "enam"
-LOCAL_TMP_DIR = "/tmp/local_store"
+LOCAL_TMP_DIR = "/workspace/tmp/local_store"
 PEERS_FILE_PREFIX = "peers_"
 CPU_COUNT = os.cpu_count() or 4
 CPU_MAX_CONNECTIONS = min(100, max(30, CPU_COUNT * 4))
