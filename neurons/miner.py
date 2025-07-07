@@ -318,7 +318,7 @@ class Miner(BaseNode):
         # Init comms
         self.comms = tplr.comms.Comms(
             wallet=self.wallet,
-            save_location="/tmp",
+            save_location="/workspace/tmp",
             key_prefix="model",
             config=self.config,
             netuid=self.config.netuid,
