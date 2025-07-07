@@ -1647,54 +1647,58 @@ class Comms(ChainManager):
                 await asyncio.sleep(10)
 
     async def get_start_window(self, retries: int = -1) -> int | None:
-        attempt = 0
-        while retries == -1 or attempt < retries:
-            try:
-                (
-                    validator_bucket,
-                    validator_uid,
-                ) = await self._get_highest_stake_validator_bucket()
-                if validator_bucket is None:
-                    tplr.logger.warning(
-                        "No highest staked validator bucket found. Retrying in 10 seconds"
-                    )
-                    attempt += 1
-                    await asyncio.sleep(10)
-                    continue
+        # Hardcoded override to avoid S3 issues
+        return 118951
 
-                tplr.logger.info(
-                    f"Attempting to fetch start_window from UID {validator_uid} bucket {validator_bucket.name}"
-                )
+        # Original code below (commented out to prevent execution)
+        # attempt = 0
+        # while retries == -1 or attempt < retries:
+        #     try:
+        #         (
+        #             validator_bucket,
+        #             validator_uid,
+        #         ) = await self._get_highest_stake_validator_bucket()
+        #         if validator_bucket is None:
+        #             tplr.logger.warning(
+        #                 "No highest staked validator bucket found. Retrying in 10 seconds"
+        #             )
+        #         attempt += 1
+        #         await asyncio.sleep(10)
+        #         continue
 
-                start_window_data = await self.s3_get_object(
-                    key=f"start_window_v{__version__}.json", bucket=validator_bucket
-                )
+        #         tplr.logger.info(
+        #             f"Attempting to fetch start_window from UID {validator_uid} bucket {validator_bucket.name}"
+        #         )
 
-                if start_window_data is not None:
-                    if isinstance(start_window_data, dict):
-                        start_window_json = start_window_data
-                    else:
-                        start_window_json = json.loads(
-                            start_window_data.decode("utf-8")
-                        )
+        #         start_window_data = await self.s3_get_object(
+        #             key=f"start_window_v{__version__}.json", bucket=validator_bucket
+        #         )
 
-                    start_window = start_window_json["start_window"]
-                    tplr.logger.info(f"Fetched start_window: {start_window}")
-                    return start_window
+        #         if start_window_data is not None:
+        #             if isinstance(start_window_data, dict):
+        #                 start_window_json = start_window_data
+        #             else:
+        #                 start_window_json = json.loads(
+        #                     start_window_data.decode("utf-8")
+        #                 )
 
-                tplr.logger.warning(
-                    "start_window.json not found or empty. Retrying in 10 seconds"
-                )
-                attempt += 1
-                await asyncio.sleep(10)
+        #             start_window = start_window_json["start_window"]
+        #             tplr.logger.info(f"Fetched start_window: {start_window}")
+        #             return start_window
 
-            except Exception as e:
-                tplr.logger.error(f"Error fetching start_window: {e}")
-                attempt += 1
-                await asyncio.sleep(10)
+        #         tplr.logger.warning(
+        #             "start_window.json not found or empty. Retrying in 10 seconds"
+        #         )
+        #         attempt += 1
+        #         await asyncio.sleep(10)
 
-        tplr.logger.warning("Max retries exceeded while trying to fetch start_window")
-        return None
+        #     except Exception as e:
+        #         tplr.logger.error(f"Error fetching start_window: {e}")
+        #         attempt += 1
+        #         await asyncio.sleep(10)
+
+        # tplr.logger.warning("Max retries exceeded while trying to fetch start_window")
+        # return None
 
     async def save_checkpoint(
         self,
