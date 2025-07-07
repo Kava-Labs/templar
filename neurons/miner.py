@@ -171,6 +171,13 @@ class Miner(BaseNode):
             f"[Init] rank={self.rank}, world_size={self.world_size}, local_rank={self.local_rank}"
         )
 
+        if self.world_size == 1:
+            # Set default values for single-GPU runs
+            if not os.getenv("MASTER_ADDR"):
+                os.environ["MASTER_ADDR"] = "localhost"
+            if not os.getenv("MASTER_PORT"):
+                os.environ["MASTER_PORT"] = "29500"
+
         if self.world_size >= 1:
             dist.init_process_group(
                 backend="nccl",
